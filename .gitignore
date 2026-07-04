@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+venv/
+.venv/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output (generated files)
+output/
+
+# Private: student data (keep _template)
+input/*
+!input/_template/
+input/_template/*
+!input/_template/config.json
+!input/_template/YYYY-MM-DD.txt

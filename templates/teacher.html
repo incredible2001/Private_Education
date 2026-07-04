@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ data.title }} - {{ student.name }} - 教师版</title>
+    <style>
+        /* ═══════════════════════════════════════════════════
+           基础变量 & 重置
+           ═══════════════════════════════════════════════════ */
+        :root {
+            --color-bg: #fafaf8;
+            --color-text: #2c2c2c;
+            --color-muted: #6b6b6b;
+            --color-border: #e0e0dc;
+            --color-accent: #2c5f8a;
+            --color-accent-light: #e8f0f8;
+            --color-good: #3a7d44;
+            --color-warn: #b8860b;
+            --color-bad: #b84545;
+            --color-tag-bg: #f0f0ec;
+            --color-card-bg: #ffffff;
+            --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+            --font-mono: "SF Mono", "Cascadia Code", "Consolas", monospace;
+            --radius: 6px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        @media print {
+            :root {
+                --color-bg: #fff;
+                --color-card-bg: #fff;
+                --shadow-sm: none;
+                --shadow-md: none;
+            }
+            body { font-size: 11pt; }
+            .no-print { display: none !important; }
+            .page-break { page-break-before: always; }
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           布局
+           ═══════════════════════════════════════════════════ */
+        .app { display: flex; min-height: 100vh; }
+
+        /* 左侧导航栏（仅教师版） */
+        .sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--color-card-bg);
+            border-right: 1px solid var(--color-border);
+            padding: 24px 16px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--color-muted);
+            margin-bottom: 16px;
+            padding-left: 8px;
+        }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav li { margin-bottom: 2px; }
+        .sidebar-nav a {
+            display: block;
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            color: var(--color-text);
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .sidebar-nav a:hover { background: var(--color-accent-light); }
+        .sidebar-nav a.active {
+            background: var(--color-accent);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        /* 主内容区 */
+        .main {
+            flex: 1;
+            max-width: 900px;
+            padding: 32px 40px;
+            margin: 0 auto;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           排版组件
+           ═══════════════════════════════════════════════════ */
+        .header {
+            border-bottom: 2px solid var(--color-accent);
+            padding-bottom: 20px;
+            margin-bottom: 28px;
+        }
+        .header .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .header .date {
+            font-size: 13px;
+            color: var(--color-muted);
+            font-family: var(--font-mono);
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--color-tag-bg);
+        }
+        .badge.accent { background: var(--color-accent-light); color: var(--color-accent); }
+        .badge.good { background: #e6f4e8; color: var(--color-good); }
+        .badge.warn { background: #fdf4e0; color: var(--color-warn); }
+        .badge.bad { background: #fce8e8; color: var(--color-bad); }
+
+        .header h1 { font-size: 26px; font-weight: 700; margin: 8px 0 4px; }
+        .header .summary { color: var(--color-muted); font-size: 15px; max-width: 680px; }
+
+        /* 卡片区块 */
+        .section { margin-bottom: 28px; }
+        .section-title {
+            font-size: 17px;
+            font-weight: 700;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--color-border);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title .icon { font-size: 18px; }
+
+        .card {
+            background: var(--color-card-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+        .card p { font-size: 14px; color: var(--color-muted); }
+
+        /* 知识点表格 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: var(--color-accent-light);
+            color: var(--color-accent);
+            font-weight: 600;
+            font-size: 13px;
+            border-bottom: 2px solid var(--color-accent);
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+
+        /* 作业列表 */
+        .hw-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .hw-item:last-child { border-bottom: none; }
+        .hw-status {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 99px;
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+        .hw-status.done { background: var(--color-good); }
+        .hw-status.partial { background: var(--color-warn); }
+        .hw-status.pending { background: var(--color-muted); }
+
+        /* 时间轴 */
+        .stage-list { list-style: none; }
+        .stage-item {
+            display: flex;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .stage-item:last-child { border-bottom: none; }
+        .stage-num {
+            width: 28px; height: 28px;
+            background: var(--color-accent-light);
+            color: var(--color-accent);
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* 教师备注 */
+        .teacher-note {
+            background: #fffdf0;
+            border: 1px solid #e8e0b0;
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            font-size: 14px;
+        }
+        .teacher-note h3 {
+            color: var(--color-warn);
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        /* 页脚 */
+        .footer {
+            margin-top: 40px;
+            padding-top: 16px;
+            border-top: 1px solid var(--color-border);
+            font-size: 12px;
+            color: var(--color-muted);
+            text-align: center;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { padding: 20px 16px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+
+<!-- 左侧导航栏 -->
+<aside class="sidebar no-print">
+    <div class="sidebar-title">{{ student.name }} · {{ data.subject }}</div>
+    <ul class="sidebar-nav">
+        <li><a href="#summary">📋 课程概览</a></li>
+        <li><a href="#stages">🕐 课堂进程</a></li>
+        <li><a href="#knowledge">📚 知识点</a></li>
+        <li><a href="#dialogue">💬 对话摘要</a></li>
+        <li><a href="#homework">📝 作业</a></li>
+        <li><a href="#notes">🗒️ 教师备注</a></li>
+        <li style="margin-top: 16px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+            <a href="../../index.html" style="color: var(--color-muted);">← 返回首页</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- 主内容 -->
+<main class="main">
+
+    <!-- 头部 -->
+    <div class="header">
+        <div class="meta-row">
+            <span class="date">{{ data.date }}</span>
+            <span class="badge accent">{{ data.subject }}</span>
+            <span class="badge">{{ data.lesson_type or '课程' }}</span>
+            {% set rating = data.performance.rating %}
+            <span class="badge {% if '优秀' in rating or '良好' in rating %}good{% elif '一般' in rating %}warn{% else %}bad{% endif %}">
+                {{ rating }}
+            </span>
+        </div>
+        <h1>{{ data.title }}</h1>
+        <p class="summary">{{ data.summary }}</p>
+    </div>
+
+    <!-- 课程概览 -->
+    <div class="section" id="summary">
+        <div class="section-title"><span class="icon">📋</span> 课程概览</div>
+        <div class="card">
+            <p><strong>科目：</strong>{{ data.subject }}</p>
+            <p><strong>类型：</strong>{{ data.lesson_type or '未标注' }}</p>
+            <p><strong>课堂表现：</strong>{{ data.performance.rating }} — {{ data.performance.comment }}</p>
+            {% if data.next_plan %}
+            <p><strong>下次计划：</strong>{{ data.next_plan }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 课堂进程 -->
+    <div class="section" id="stages">
+        <div class="section-title"><span class="icon">🕐</span> 课堂进程</div>
+        <ul class="stage-list">
+            {% for stage in data.stages %}
+            <li class="stage-item">
+                <span class="stage-num">{{ loop.index }}</span>
+                <div>
+                    <strong>{{ stage.title }}</strong>
+                    <p style="color: var(--color-muted); font-size: 14px;">{{ stage.description }}</p>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- 知识点 -->
+    <div class="section" id="knowledge">
+        <div class="section-title"><span class="icon">📚</span> 知识点清单</div>
+        {% if data.knowledge_points %}
+        <div class="card" style="padding: 0;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>知识点</th>
+                        <th>掌握情况</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kp in data.knowledge_points %}
+                    <tr>
+                        <td><strong>{{ kp.name }}</strong></td>
+                        <td>
+                            {% set m = kp.mastery %}
+                            <span class="badge {% if '已掌握' in m %}good{% elif '需巩固' in m %}warn{% else %}accent{% endif %}">
+                                {{ m }}
+                            </span>
+                        </td>
+                        <td style="color: var(--color-muted);">{{ kp.detail or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--color-muted);">本课未涉及明确的知识点。</p>
+        {% endif %}
+    </div>
+
+    <!-- 对话摘要 -->
+    <div class="section" id="dialogue">
+        <div class="section-title"><span class="icon">💬</span> 对话摘要</div>
+        <div class="card">
+            {{ data.corrected_text | replace('\n', '<br>') | safe }}
+        </div>
+    </div>
+
+    <!-- 作业 -->
+    <div class="section" id="homework">
+        <div class="section-title"><span class="icon">📝</span> 作业</div>
+
+        {% if data.homework_assigned %}
+        <h3 style="font-size:15px; font-weight:600; margin-bottom:8px;">📌 本次布置</h3>
+        {% for hw in data.homework_assigned %}
+        <div class="card">
+            <h3>{{ hw.content }}</h3>
+            {% if hw.source %}<p>来源：{{ hw.source }}</p>{% endif %}
+            {% if hw.due_date %}<p>截止：{{ hw.due_date }}</p>{% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if data.homework_checked %}
+        <h3 style="font-size:15px; font-weight:600; margin:16px 0 8px;">✅ 上次作业检查</h3>
+        {% for hw in data.homework_checked %}
+        <div class="card">
+            <h3>
+                <span class="hw-status {% if '完成' in hw.status and not '部分' in hw.status and not '未' in hw.status %}done{% elif '部分' in hw.status %}partial{% else %}pending{% endif %}"></span>
+                {{ hw.content }}
+            </h3>
+            <p>状态：{{ hw.status }}</p>
+            {% if hw.comment %}<p>评价：{{ hw.comment }}</p>{% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if not data.homework_assigned and not data.homework_checked %}
+        <p style="color: var(--color-muted);">本课无作业记录。</p>
+        {% endif %}
+    </div>
+
+    <!-- 教师备注 -->
+    <div class="section" id="notes">
+        <div class="section-title"><span class="icon">🗒️</span> 教师备注</div>
+        <div class="teacher-note">
+            <h3>📌 内部备注（仅教师可见）</h3>
+            <p>{{ data.teacher_notes or '（无备注）' }}</p>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <p>由 Private_Education 自动生成 · {{ data.date }} · {{ student.name }} · {{ data.subject }}</p>
+    </div>
+
+</main>
+</div>
+</body>
+</html>

@@ -17,7 +17,7 @@ from .config import (
     list_txt_files,
     OUTPUT_DIR,
 )
-from .parser import parse_transcript
+from .parser import parse_transcript, split_transcript_segments
 from .pipeline import run_and_track_homework
 from .renderer import render_lesson, render_index
 
@@ -33,21 +33,12 @@ def process_one_lesson(
     student_config: dict,
     rebuild: bool = False,
 ) -> bool:
-    """处理单节课。
+    """处理单节课（可能包含多段录音）。
 
     Returns:
         True 表示成功，False 表示跳过或失败
     """
     lesson_date = txt_path.stem  # e.g., "2026-07-03"
-
-    # 检查是否已经处理过（增量模式下跳过已处理）
-    if not rebuild:
-        out_base = OUTPUT_DIR / student_name
-        # 在所有科目目录中查找
-        existing = list(out_base.glob(f"**/{lesson_date}_教师.html"))
-        if existing:
-            print(f"  - 跳过（已有汇报）: {lesson_date}")
-            return False
 
     print(f"\n>>> 处理: {student_name}/{txt_path.name}")
 
@@ -59,53 +50,89 @@ def process_one_lesson(
     if parsed.lesson_type:
         print(f"  课程类型: {parsed.lesson_type}")
 
-    # 构建额外上下文
-    extra_context_parts = []
-    if parsed.subject:
-        extra_context_parts.append(f"用户标注科目为：{parsed.subject}")
-    if student_config.get("subjects"):
-        extra_context_parts.append(
-            f"该学生的科目列表：{'、'.join(student_config['subjects'])}"
-        )
-    extra_context = "\n".join(extra_context_parts) if extra_context_parts else ""
-
-    # 2. 运行 AI Pipeline
-    try:
-        result = run_and_track_homework(
-            transcript=parsed.raw_body,
-            student_config=student_config,
-            lesson_date=parsed.date or lesson_date,
-            extra_context=extra_context,
-            user_notes=parsed.notes,
-        )
-    except Exception as e:
-        print(f"  X AI 处理失败: {e}")
+    # 2. 拆分录音段
+    segments = split_transcript_segments(parsed.raw_body)
+    if not segments:
+        print(f"  X 转录正文为空")
         return False
 
-    # 如果用户标注了科目但 AI 没识别出来，使用用户标注
-    if parsed.subject and (not result.get("subject") or result["subject"] == "未分类"):
-        result["subject"] = parsed.subject
+    print(f"  共 {len(segments)} 段录音")
 
-    # 如果用户标注了课程类型
-    if parsed.lesson_type and not result.get("lesson_type"):
-        result["lesson_type"] = parsed.lesson_type
+    # 预扫描已有输出（增量模式下用于逐段跳过）
+    out_base = OUTPUT_DIR / student_name
+    existing_outputs = set()
+    if not rebuild:
+        for f in out_base.glob("lessons/*/教师.html"):
+            existing_outputs.add(f.parent.name)  # e.g., "2026-07-05_0916"
 
-    # 3. 渲染 HTML
-    try:
-        paths = render_lesson(
-            data=result,
-            student_config=student_config,
-            lesson_date=parsed.date or lesson_date,
-            corrected_text=result.get("corrected_text", parsed.raw_body),
-        )
-        print(f"  -> 教师版: {paths['teacher'].name}")
-        print(f"  -> 家长版: {paths['parent'].name}")
-        print(f"  -> 学生版: {paths['student'].name}")
-    except Exception as e:
-        print(f"  X HTML 渲染失败: {e}")
-        return False
+    success_count = 0
+    for i, seg in enumerate(segments):
+        seg_num = f"[{i+1}/{len(segments)}]" if len(segments) > 1 else ""
 
-    return True
+        # 多段时用日期+时间作为文件名标记，避免冲突
+        if len(segments) > 1 and seg["start_time"]:
+            seg_lesson_date = f"{parsed.date or lesson_date}_{seg['start_time'].replace(':', '')}"
+        else:
+            seg_lesson_date = parsed.date or lesson_date
+
+        # 逐段检查是否已处理（增量模式）
+        if not rebuild and seg_lesson_date in existing_outputs:
+            print(f"  - 跳过段 {seg_num}（已有汇报）: {seg_lesson_date}")
+            success_count += 1  # 已存在也算成功
+            continue
+
+        print(f"\n  --- 段 {seg_num} ({seg['start_time'] or '全文'}) ---" if len(segments) > 1 else "")
+
+        # 构建段级额外上下文
+        extra_context_parts = []
+        if parsed.subject:
+            extra_context_parts.append(f"用户标注总科目为：{parsed.subject}")
+        if parsed.notes:
+            extra_context_parts.append(f"用户备注：{parsed.notes}")
+        if seg["start_time"]:
+            extra_context_parts.append(f"当前段录音开始时间：{seg['start_time']}")
+        if student_config.get("subjects"):
+            extra_context_parts.append(
+                f"该学生的科目列表：{'、'.join(student_config['subjects'])}"
+            )
+        extra_context = "\n".join(extra_context_parts) if extra_context_parts else ""
+
+        # 运行 AI Pipeline
+        try:
+            result = run_and_track_homework(
+                transcript=seg["text"],
+                student_config=student_config,
+                lesson_date=parsed.date or lesson_date,
+                extra_context=extra_context,
+                user_notes=parsed.notes,
+            )
+        except Exception as e:
+            print(f"  X AI 处理失败: {e}")
+            continue
+
+        # 如果用户标注了科目但 AI 没识别出来
+        if parsed.subject and (not result.get("subject") or result["subject"] == "未分类"):
+            result["subject"] = parsed.subject
+        if parsed.lesson_type and not result.get("lesson_type"):
+            result["lesson_type"] = parsed.lesson_type
+
+        # 渲染 HTML
+        try:
+            paths = render_lesson(
+                data=result,
+                student_config=student_config,
+                lesson_date=seg_lesson_date,
+                corrected_text=result.get("corrected_text", seg["text"]),
+            )
+            print(f"  -> 教师版: {paths['teacher'].name}")
+            print(f"  -> 家长版: {paths['parent'].name}")
+            print(f"  -> 学生版: {paths['student'].name}")
+            success_count += 1
+        except Exception as e:
+            print(f"  X HTML 渲染失败: {e}")
+            continue
+
+    return success_count > 0
 
 
 def process_student(student_name: str, rebuild: bool = False) -> int:

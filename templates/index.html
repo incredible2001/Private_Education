@@ -49,13 +49,6 @@
         }
         .badge.accent { background: var(--color-accent-light); color: var(--color-accent); }
 
-        .subject-group { margin-bottom: 32px; }
-        .subject-title {
-            font-size: 18px; font-weight: 700; padding-bottom: 8px;
-            border-bottom: 1px solid var(--color-border); margin-bottom: 16px;
-            display: flex; align-items: center; gap: 8px;
-        }
-
         .lesson-list { list-style: none; }
         .lesson-item {
             background: var(--color-card-bg);
@@ -67,9 +60,12 @@
             transition: box-shadow 0.15s;
         }
         .lesson-item:hover { box-shadow: var(--shadow-md); }
+        .lesson-item .meta-row {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
+        }
         .lesson-item .date {
             font-size: 13px; color: var(--color-muted);
-            font-family: var(--font-mono); margin-bottom: 2px;
+            font-family: var(--font-mono);
         }
         .lesson-item .title {
             font-size: 16px; font-weight: 600; margin-bottom: 4px;
@@ -107,29 +103,24 @@
         </p>
     </div>
 
-    {% if subjects %}
-    {% for subject in subjects %}
-    <div class="subject-group">
-        <div class="subject-title">
-            <span class="badge accent">{{ subject.name }}</span>
-            {{ subject.lesson_count }} 节课
-        </div>
-        <ul class="lesson-list">
-            {% for lesson in subject.lessons %}
-            <li class="lesson-item">
-                <div class="date">{{ lesson.date }}</div>
-                <div class="title">{{ lesson.title }}</div>
-                <div class="summary">{{ lesson.summary }}</div>
-                <div class="links">
-                    <a href="{{ lesson.teacher_path }}" target="_blank">📋 教师版</a>
-                    <a href="{{ lesson.parent_path }}" target="_blank">👨‍👩‍👧 家长版</a>
-                    <a href="{{ lesson.student_path }}" target="_blank">📖 学生版</a>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-    {% endfor %}
+    {% if lessons %}
+    <ul class="lesson-list">
+        {% for lesson in lessons %}
+        <li class="lesson-item">
+            <div class="meta-row">
+                <span class="date">{{ lesson.date }}</span>
+                <span class="badge accent">{{ lesson.subject }}</span>
+            </div>
+            <div class="title">{{ lesson.title }}</div>
+            <div class="summary">{{ lesson.summary }}</div>
+            <div class="links">
+                <a href="{{ lesson.teacher_path }}" target="_blank">📋 教师版</a>
+                <a href="{{ lesson.parent_path }}" target="_blank">👨‍👩‍👧 家长版</a>
+                <a href="{{ lesson.student_path }}" target="_blank">📖 学生版</a>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
     {% else %}
     <div class="empty">
         <p>暂无课程记录。</p>

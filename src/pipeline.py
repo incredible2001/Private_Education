@@ -23,7 +23,7 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
 
 
-def _call_deepseek(prompt: str, system: str = "你是一个专业的助手。") -> str:
+def _call_deepseek(prompt: str, system: str = "你是一个专业的助手。", max_tokens: int = 8192) -> str:
     """调用 DeepSeek API，返回文本响应。"""
     client = _get_client()
     response = client.chat.completions.create(
@@ -33,7 +33,7 @@ def _call_deepseek(prompt: str, system: str = "你是一个专业的助手。") 
             {"role": "user", "content": prompt},
         ],
         temperature=0.3,
-        max_tokens=8192,
+        max_tokens=max_tokens,
     )
     content = response.choices[0].message.content
     # 某些模型版本可能返回 None
@@ -115,7 +115,11 @@ def step_text_correct(transcript: str, speakers: dict) -> str:
     )
 
     print("  [2/3] 文字纠错中...")
-    return _call_deepseek(prompt, system="你是一个中文文本校对助手。")
+    # 动态调整 max_tokens：纠错输出应与原文长度相当
+    # 中文字符约等于 0.5-1 token，取 2 倍保证充足余量，上限 65536
+    dynamic_max_tokens = min(max(8192, int(len(transcript) * 2)), 65536)
+    print(f"    (max_tokens: {dynamic_max_tokens})")
+    return _call_deepseek(prompt, system="你是一个中文文本校对助手。", max_tokens=dynamic_max_tokens)
 
 
 def step_summarize(

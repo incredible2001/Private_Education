@@ -105,3 +105,69 @@ def extract_speakers(raw_body: str) -> list[str]:
             seen.add(s)
             speakers.append(s)
     return speakers
+
+
+def split_transcript_segments(raw_body: str) -> list[dict]:
+    """将转录正文按录音段拆分。
+
+    每段录音以「YYYY-MM-DD HH:MM 记录_原文」开头，
+    以「两人对话。」或文件末尾结束。
+
+    Args:
+        raw_body: 解析后的转录正文
+
+    Returns:
+        list[dict]: 每段包含:
+            - start_time: 录音开始时间 (如 "09:16")
+            - text: 该段的完整文本（含发言人标记）
+            如果只有一段或不含段标记，返回单个元素列表
+    """
+    # 匹配段头：2026-07-05 09:16 记录_原文
+    segment_header = re.compile(
+        r"^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+记录_原文\s*$",
+        re.MULTILINE,
+    )
+    # 匹配段时间标题行：2026年07月05日 09:16
+    time_title = re.compile(r"^\d{4}年\d{2}月\d{2}日\s+\d{2}:\d{2}\s*$", re.MULTILINE)
+
+    headers = list(segment_header.finditer(raw_body))
+    if len(headers) <= 1:
+        # 只有一段或没有段标记，直接返回整个 body
+        text = raw_body.strip()
+        if text:
+            return [{"start_time": "", "text": text}]
+        return []
+
+    segments = []
+    for i, match in enumerate(headers):
+        time_str = match.group(2)  # HH:MM
+        start = match.start()
+        # 跳过段头行和紧跟的日期标题行
+        content_start = match.end()
+
+        # 跳过紧随其后的日期行（如 "2026年07月05日 09:16"）
+        next_pos = content_start
+        next_line_match = re.match(r"^.*$", raw_body[next_pos:], re.MULTILINE)
+        if next_line_match:
+            line = next_line_match.group(0).strip()
+            if time_title.match(line):
+                content_start = next_pos + next_line_match.end() + 1  # +1 for newline
+
+        # 确定该段的结束位置
+        if i + 1 < len(headers):
+            end = headers[i + 1].start()
+        else:
+            end = len(raw_body)
+
+        segment_text = raw_body[content_start:end].strip()
+
+        # 清理末尾的「两人对话。」标记
+        segment_text = re.sub(r"\n?两人对话。\s*$", "", segment_text).strip()
+
+        if segment_text:
+            segments.append({
+                "start_time": time_str,
+                "text": segment_text,
+            })
+
+    return segments

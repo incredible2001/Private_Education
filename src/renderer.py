@@ -47,15 +47,15 @@ def render_lesson(
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
 
-    # 输出目录
-    out_base = OUTPUT_DIR / student_name / subject
+    # 输出目录：lessons/<日期>/ 子文件夹，index.html 留在学生根目录
+    out_base = OUTPUT_DIR / student_name / "lessons" / lesson_date
     out_base.mkdir(parents=True, exist_ok=True)
 
     # 渲染三份 HTML
     views = {
-        "teacher": ("teacher.html", f"{lesson_date}_教师.html"),
-        "parent": ("parent.html", f"{lesson_date}_家长.html"),
-        "student": ("student.html", f"{lesson_date}_学生.html"),
+        "teacher": ("teacher.html", "教师.html"),
+        "parent": ("parent.html", "家长.html"),
+        "student": ("student.html", "学生.html"),
     }
 
     result = {}
@@ -79,55 +79,37 @@ def render_index(student_config: dict) -> Path:
     out_base = OUTPUT_DIR / student_name
     out_base.mkdir(parents=True, exist_ok=True)
 
-    # 扫描各科目的 HTML 文件
-    subjects_data = []
-    total_lessons = 0
+    # 扫描 lessons/<日期>/ 下的教师版 HTML，按日期排序
+    lessons = []
+    teacher_files = sorted(out_base.glob("lessons/*/教师.html"), reverse=True)
 
-    for subject_dir in sorted(out_base.iterdir()):
-        if not subject_dir.is_dir():
-            continue
-        if subject_dir.name == "homework.json":
-            continue
+    for tf in teacher_files:
+        # 日期即子文件夹名，如 "2026-07-14"、"2026-07-05_0916"
+        date_str = tf.parent.name
 
-        subject_name = subject_dir.name
-        lessons = []
+        # 解析 HTML 提取标题、摘要和科目
+        title, summary, subject = _extract_meta_from_html(tf)
 
-        # 收集该科目下的教师版 HTML（按日期排序）
-        teacher_files = sorted(subject_dir.glob("*_教师.html"), reverse=True)
-        for tf in teacher_files:
-            # 提取日期
-            stem = tf.stem  # e.g., "2026-07-03_教师"
-            date_str = stem.replace("_教师", "")
+        # 科目标签（从 HTML 中解析的 badge accent 文本）
+        if not subject:
+            subject = "未分类"
 
-            # 简单解析 HTML 提取标题和摘要（不使用完整 HTML 解析器）
-            title, summary = _extract_meta_from_html(tf)
-
-            # 相对路径（相对于 index.html）
-            parent_path = f"{subject_name}/{stem.replace('_教师', '_家长')}.html"
-            student_path = f"{subject_name}/{stem.replace('_教师', '_学生')}.html"
-            teacher_path = f"{subject_name}/{tf.name}"
-
-            lessons.append({
-                "date": date_str,
-                "title": title or f"{subject_name} 课程",
-                "summary": summary or "",
-                "teacher_path": teacher_path,
-                "parent_path": parent_path,
-                "student_path": student_path,
-            })
-
-        if lessons:
-            subjects_data.append({
-                "name": subject_name,
-                "lesson_count": len(lessons),
-                "lessons": lessons,
-            })
-            total_lessons += len(lessons)
+        # 相对路径（index.html 在学生根目录，报告在 lessons/<日期>/ 下）
+        prefix = f"lessons/{date_str}"
+        lessons.append({
+            "date": date_str,
+            "title": title or f"{subject} 课程",
+            "summary": summary or "",
+            "subject": subject,
+            "teacher_path": f"{prefix}/教师.html",
+            "parent_path": f"{prefix}/家长.html",
+            "student_path": f"{prefix}/学生.html",
+        })
 
     ctx = {
         "student": student_config,
-        "subjects": subjects_data,
-        "total_lessons": total_lessons,
+        "lessons": lessons,
+        "total_lessons": len(lessons),
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -140,20 +122,21 @@ def render_index(student_config: dict) -> Path:
     return filepath
 
 
-def _extract_meta_from_html(filepath: Path) -> tuple[str, str]:
-    """从 HTML 文件中简单提取标题和摘要。
+def _extract_meta_from_html(filepath: Path) -> tuple[str, str, str]:
+    """从 HTML 文件中简单提取标题、摘要和科目。
 
     Returns:
-        (title, summary) 元组
+        (title, summary, subject) 元组
     """
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
     except (IOError, UnicodeDecodeError):
-        return ("", "")
+        return ("", "", "")
 
     title = ""
     summary = ""
+    subject = ""
 
     # 提取 <h1> 标题
     import re
@@ -169,4 +152,11 @@ def _extract_meta_from_html(filepath: Path) -> tuple[str, str]:
         if len(summary) > 120:
             summary = summary[:120] + "..."
 
-    return (title, summary)
+    # 提取科目标签（第一个 badge accent）
+    subject_match = re.search(
+        r'<span class="badge accent">(.+?)</span>', content
+    )
+    if subject_match:
+        subject = subject_match.group(1).strip()
+
+    return (title, summary, subject)
